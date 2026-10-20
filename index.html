@@ -43,7 +43,7 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
   <canvas id="c" width="528" height="528"></canvas>
   <div class="ov" id="start">
     <h2>Оберіть складність</h2>
-    <p>З’їдайте яблука: 1 яблуко = 5 очок. Зберіть 100 очок, щоб перемогти. Бомба вибухає за 3 секунди — тримайтеся від неї далі!</p>
+    <p>З’їдайте яблука: 1 яблуко = 5 очок. Зберіть 100 очок, щоб перемогти. Бомба вибухає за 3 секунди. Великі птахи вилітають несподівано, летять по прямій і вбивають — пильнуйте!</p>
     <button data-d="0">Легкий</button>
     <button data-d="1" class="alt">Складний</button>
     <button data-d="2" class="n">Кошмарний</button>
@@ -88,13 +88,13 @@ var bgc=document.createElement('canvas');bgc.width=bgc.height=W;
   g.fillStyle='rgba(0,0,0,.28)';g.beginPath();g.moveTo(x+2,y+11);g.lineTo(x+12,y+2);g.lineTo(x+22,y+11);g.fill()});
 })();
 var LV=[
- {n:'Легкий',step:150,bomb:4200,max:2,apples:4,r:1},
- {n:'Складний',step:105,bomb:2600,max:4,apples:4,r:2},
- {n:'Кошмарний',step:65,bomb:1500,max:7,apples:5,r:3}];
+ {n:'Легкий',step:150,bomb:4200,max:2,apples:4,r:1,birds:1,birdGap:7000,bspd:5},
+ {n:'Складний',step:105,bomb:2600,max:4,apples:4,r:2,birds:2,birdGap:5000,bspd:8},
+ {n:'Кошмарний',step:65,bomb:1500,max:7,apples:5,r:3,birds:3,birdGap:3500,bspd:12}];
 var $=function(i){return document.getElementById(i)};
 var best=[0,0,0];
 try{var b=JSON.parse(localStorage.getItem('worm-best')||'[0,0,0]');if(b&&b.length==3)best=b}catch(e){}
-var diff=0,worm,dir,q,apples,bombs,booms,score,gt,acc,spawnT,state='menu',last=0;
+var diff=0,worm,dir,q,apples,bombs,booms,birds=[],birdT,score,gt,acc,spawnT,state='menu',last=0;
 var DV={U:[0,-1],D:[0,1],L:[-1,0],R:[1,0]};
 
 function occ(x,y){
@@ -117,7 +117,7 @@ function addBomb(){
 
 function start(d){
  diff=d;worm=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];dir='R';q=[];apples=[];bombs=[];booms=[];
- score=0;gt=0;acc=0;spawnT=1500;
+ score=0;gt=0;acc=0;spawnT=1500;birds=[];birdT=LV[d].birdGap*0.6;
  for(var i=0;i<LV[d].apples;i++)addApple();
  $('lv').textContent=LV[d].n;$('sc').textContent='0 / '+GOAL;$('bs').textContent=best[d];
  $('start').classList.add('hide');$('over').classList.add('hide');$('pause').classList.add('hide');
@@ -126,7 +126,7 @@ function end(why){
  state='over';
  if(score>best[diff]){best[diff]=score;try{localStorage.setItem('worm-best',JSON.stringify(best))}catch(e){}}
  $('bs').textContent=best[diff];
- $('ot').textContent=why=='win'?'Перемога! 🎉':why=='bomb'?'Бабах! Бомба вибухнула':why=='wall'?'Черв’ячок упав у воду':'Черв’ячок вкусив сам себе';
+ $('ot').textContent=why=='win'?'Перемога! 🎉':why=='bomb'?'Бабах! Бомба вибухнула':why=='bird'?'Птах упіймав черв’ячка':why=='wall'?'Черв’ячок упав у воду':'Черв’ячок вкусив сам себе';
  $('op').textContent='Ваш результат: '+score+' очок. Рекорд на рівні «'+LV[diff].n+'»: '+best[diff]+'.';
  $('over').classList.remove('hide')}
 
@@ -153,6 +153,14 @@ function explode(b){
  for(var i=0;i<worm.length;i++)if(Math.abs(worm[i].x-b.x)<=LV[diff].r&&Math.abs(worm[i].y-b.y)<=LV[diff].r){return true}
  return false}
 
+function addBird(){
+ var t=Math.floor(Math.random()*4),l=Math.floor(Math.random()*(N-1)),b={w:gt};
+ if(Math.random()<0.5)l=Math.max(0,Math.min(N-2,(t<2?worm[0].y:worm[0].x)-Math.floor(Math.random()*2)));
+ if(t==0){b.x=-3;b.y=l;b.dx=1;b.dy=0}
+ else if(t==1){b.x=N+1;b.y=l;b.dx=-1;b.dy=0}
+ else if(t==2){b.x=l;b.y=-3;b.dx=0;b.dy=1}
+ else{b.x=l;b.y=N+1;b.dx=0;b.dy=-1}
+ birds.push(b)}
 function update(dt){
  gt+=dt;acc+=dt;
  while(acc>=LV[diff].step&&state=='play'){acc-=LV[diff].step;step()}
@@ -161,7 +169,17 @@ function update(dt){
  if(spawnT<=0){addBomb();spawnT=LV[diff].bomb*(0.7+Math.random()*0.6)}
  var hit=false;
  for(var i=bombs.length-1;i>=0;i--)if(gt-bombs[i].t>=3000){if(explode(bombs[i]))hit=true;bombs.splice(i,1)}
- if(hit)end('bomb')}
+ if(hit){end('bomb');return}
+ birdT-=dt;
+ if(birdT<=0&&birds.length<LV[diff].birds){addBird();birdT=LV[diff].birdGap*(0.7+Math.random()*0.6)}
+ for(var j=birds.length-1;j>=0;j--){
+  var k=birds[j];
+  if(gt<k.w)continue;
+  var mv=LV[diff].bspd*dt/1000;k.x+=k.dx*mv;k.y+=k.dy*mv;
+  if(k.x<-3||k.x>N+3||k.y<-3||k.y>N+3){birds.splice(j,1);continue}
+  for(var q2=0;q2<worm.length;q2++){var wc=worm[q2];
+   if(wc.x<k.x+1.85&&wc.x+1>k.x+0.15&&wc.y<k.y+1.85&&wc.y+1>k.y+0.15){end('bird');return}}}
+}
 
 function rr(x,y,w,h,r){cx.beginPath();cx.roundRect?cx.roundRect(x,y,w,h,r):cx.rect(x,y,w,h)}
 function draw(){
@@ -197,6 +215,19 @@ function draw(){
   var ex=hx+v[0]*4+(j?-ox:ox),ey=hy+v[1]*4+(j?-oy:oy);
   cx.fillStyle='#fff';cx.beginPath();cx.arc(ex,ey,3.6,0,7);cx.fill();
   cx.fillStyle='#111';cx.beginPath();cx.arc(ex+v[0],ey+v[1],1.8,0,7);cx.fill()})}
+ // birds
+ for(i=0;i<birds.length;i++){
+  var k=birds[i];
+  {
+   cx.save();cx.translate((k.x+1)*S,(k.y+1)*S);cx.rotate(Math.atan2(k.dy,k.dx));
+   var fl=Math.sin(gt/70)*8;
+   cx.fillStyle='rgba(0,0,0,.18)';cx.beginPath();cx.ellipse(3,5,20,12,0,0,7);cx.fill();
+   [-1,1].forEach(function(s){cx.fillStyle='#2b2f66';cx.beginPath();cx.moveTo(2,0);cx.lineTo(-12,s*(20+fl));cx.lineTo(10,s*5);cx.closePath();cx.fill()});
+   cx.fillStyle='#4a52a8';cx.beginPath();cx.ellipse(0,0,19,9,0,0,7);cx.fill();
+   cx.beginPath();cx.arc(14,0,7,0,7);cx.fill();
+   cx.fillStyle='#ffb020';cx.beginPath();cx.moveTo(19,-3);cx.lineTo(28,0);cx.lineTo(19,3);cx.fill();
+   cx.fillStyle='#fff';cx.beginPath();cx.arc(15,-3.5,1.8,0,7);cx.arc(15,3.5,1.8,0,7);cx.fill();
+   cx.restore()}}
  // explosions
  for(i=booms.length-1;i>=0;i--){
   var e=booms[i],age=(gt-e.t)/500;
